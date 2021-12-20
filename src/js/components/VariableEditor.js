@@ -55,9 +55,18 @@ class VariableEditor extends React.PureComponent {
             onDelete,
             onSelect,
             displayArrayKey,
-            quotesOnKeys
+            quotesOnKeys,
+            canEdit,
+            canDelete
         } = this.props;
         const { editMode } = this.state;
+        
+        var showEditIcon = onEdit !== false;
+        if(showEditIcon && canEdit) showEditIcon = canEdit({ namespace, name: variable.name });
+        
+        var showDeleteIcon = onDelete !== false;
+        if(showDeleteIcon && canDelete) showDeleteIcon = canDelete({ namespace, name: variable.name });
+        
         return (
             <div
                 {...Theme(theme, 'objectKeyVal', {
@@ -69,7 +78,7 @@ class VariableEditor extends React.PureComponent {
                 onMouseLeave={() =>
                     this.setState({ ...this.state, hovered: false })
                 }
-                class="variable-row"
+                className="variable-row"
                 key={variable.name}
             >
                 {type == 'array' ? (
@@ -86,7 +95,7 @@ class VariableEditor extends React.PureComponent {
                     <span>
                         <span
                             {...Theme(theme, 'object-name')}
-                            class="object-key"
+                            className="object-key"
                             key={variable.name + '_' + namespace}
                         >
                             {!!quotesOnKeys && (
@@ -103,15 +112,14 @@ class VariableEditor extends React.PureComponent {
                     </span>
                 )}
                 <div
-                    class="variable-value"
+                    className="variable-value"
                     onClick={
-                        onSelect === false && onEdit === false
+                        onSelect === false && !showEditIcon
                             ? null
                             : e => {
                                   let location = [...namespace];
                                   if (
-                                      (e.ctrlKey || e.metaKey) &&
-                                      onEdit !== false
+                                      (e.ctrlKey || e.metaKey) && showEditIcon
                                   ) {
                                       this.prepopInput(variable);
                                   } else if (onSelect !== false) {
@@ -138,10 +146,10 @@ class VariableEditor extends React.PureComponent {
                         {...{ theme, namespace: [...namespace, variable.name] }}
                     />
                 ) : null}
-                {onEdit !== false && editMode == false
+                {showEditIcon && editMode == false
                     ? this.getEditIcon()
                     : null}
-                {onDelete !== false && editMode == false
+                {showDeleteIcon && editMode == false
                     ? this.getRemoveIcon()
                     : null}
             </div>
@@ -153,14 +161,14 @@ class VariableEditor extends React.PureComponent {
 
         return (
             <div
-                class="click-to-edit"
+                className="click-to-edit"
                 style={{
                     verticalAlign: 'top',
                     display: this.state.hovered ? 'inline-block' : 'none'
                 }}
             >
                 <Edit
-                    class="click-to-edit-icon"
+                    className="click-to-edit-icon"
                     {...Theme(theme, 'editVarIcon')}
                     onClick={() => {
                         this.prepopInput(variable);
@@ -190,14 +198,14 @@ class VariableEditor extends React.PureComponent {
 
         return (
             <div
-                class="click-to-remove"
+                className="click-to-remove"
                 style={{
                     verticalAlign: 'top',
                     display: this.state.hovered ? 'inline-block' : 'none'
                 }}
             >
                 <Remove
-                    class="click-to-remove-icon"
+                    className="click-to-remove-icon"
                     {...Theme(theme, 'removeVarIcon')}
                     onClick={() => {
                         dispatcher.dispatch({
@@ -218,7 +226,7 @@ class VariableEditor extends React.PureComponent {
 
     getValue = (variable, editMode) => {
         const type = editMode ? false : variable.type;
-        const { props } = this;
+        const { props } = this;        
         switch (type) {
             case false:
                 return this.getEditInput();
@@ -245,7 +253,7 @@ class VariableEditor extends React.PureComponent {
             default:
                 // catch-all for types that weren't anticipated
                 return (
-                    <div class="object-value">
+                    <div className="object-value">
                         {JSON.stringify(variable.value)}
                     </div>
                 );
@@ -254,26 +262,56 @@ class VariableEditor extends React.PureComponent {
 
     getEditInput = () => {
         const { theme } = this.props;
-        const { editValue } = this.state;
-
+        const { editValue, parsedInput } = this.state;
+        const setText = (value) => {
+            const detected = parseInput(value);
+            this.setState({
+                editValue: value,
+                parsedInput: {
+                    type: detected.type,
+                    value: detected.value
+                }
+            });
+        };
+        const setValue = (value) => setText(''+value);
+        const EditIcons = ({ showDetected, submitDetected }) => (
+            <div {...Theme(theme, 'edit-icon-container')}>
+                <Remove
+                    className="edit-cancel"
+                    {...Theme(theme, 'cancel-icon')}
+                    onClick={() => {
+                        this.setState({ editMode: false, editValue: '' });
+                    }}
+                />
+                <CheckCircle
+                    className="edit-check string-value"
+                    {...Theme(theme, 'check-icon')}
+                    onClick={() => {
+                        this.submitEdit(submitDetected);
+                    }}
+                />
+                {showDetected && <div>{this.showDetected()}</div>}
+            </div>            
+        );
+        const { namespace, variable, onRenderValueEditor } = this.props;
+        const { name } = variable;
+        const control = onRenderValueEditor?.({ 
+            namespace, 
+            name, 
+            value: editValue, 
+            setValue, 
+            EditIcons,
+            theme: Theme(theme, 'edit-input') 
+        });        
+        if(control) return control;        
         return (
             <div>
                 <AutosizeTextarea
                     type="text"
-                    inputRef={input => input && input.focus()}
+                    ref={input => input && input.focus()} 
                     value={editValue}
-                    class="variable-editor"
-                    onChange={event => {
-                        const value = event.target.value;
-                        const detected = parseInput(value);
-                        this.setState({
-                            editValue: value,
-                            parsedInput: {
-                                type: detected.type,
-                                value: detected.value
-                            }
-                        });
-                    }}
+                    className="variable-editor"
+                    onChange={event => setText(event.target.value)}
                     onKeyDown={e => {
                         switch (e.key) {
                             case 'Escape': {
@@ -295,24 +333,8 @@ class VariableEditor extends React.PureComponent {
                     placeholder="update this value"
                     minRows={2}
                     {...Theme(theme, 'edit-input')}
-                />
-                <div {...Theme(theme, 'edit-icon-container')}>
-                    <Remove
-                        class="edit-cancel"
-                        {...Theme(theme, 'cancel-icon')}
-                        onClick={() => {
-                            this.setState({ editMode: false, editValue: '' });
-                        }}
-                    />
-                    <CheckCircle
-                        class="edit-check string-value"
-                        {...Theme(theme, 'check-icon')}
-                        onClick={() => {
-                            this.submitEdit();
-                        }}
-                    />
-                    <div>{this.showDetected()}</div>
-                </div>
+                />            
+                <EditIcons showDetected/>
             </div>
         );
     };
@@ -350,7 +372,7 @@ class VariableEditor extends React.PureComponent {
                     <div {...Theme(theme, 'detected-row')}>
                         {detected}
                         <CheckCircle
-                            class="edit-check detected"
+                            className="edit-check detected"
                             style={{
                                 verticalAlign: 'top',
                                 paddingLeft: '3px',

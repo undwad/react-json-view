@@ -56,7 +56,14 @@ class ReactJsonView extends React.PureComponent {
         style: {},
         validationMessage: 'Validation Error',
         defaultValue: null,
-        displayArrayKey: true
+        displayArrayKey: true,
+        
+        canEdit: false,
+        canDelete: false,
+        canAdd: false,
+        onRenderValueEditor: null,
+        onRenderKeyLabel: null,
+        onRenderKeyEditor: null,
     };
 
     // will trigger whenever setState() is called, or parent passes in new props.
@@ -172,7 +179,7 @@ class ReactJsonView extends React.PureComponent {
 
         return (
             <div
-                class="react-json-view"
+                className="react-json-view"
                 style={{ ...Theme(theme, 'app-container').style, ...style }}
             >
                 <ValidationFailure
